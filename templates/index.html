@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Embroidery Preprocessor</title>
+  <style>
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f5f5f5;color:#333;padding:2rem;max-width:960px;margin:auto}
+    h1{margin-bottom:.5rem;text-align:center}
+    .subtitle{text-align:center;color:#777;margin-bottom:1.5rem;font-size:.9rem}
+
+    /* Steps indicator */
+    .steps{display:flex;justify-content:center;gap:2rem;margin-bottom:2rem}
+    .step-indicator{display:flex;align-items:center;gap:.5rem;color:#aaa;font-weight:600;font-size:.95rem}
+    .step-indicator .num{width:28px;height:28px;border-radius:50%;background:#ddd;color:#fff;display:flex;align-items:center;justify-content:center;font-size:.85rem}
+    .step-indicator.active{color:#4a90d9}
+    .step-indicator.active .num{background:#4a90d9}
+    .step-indicator.done{color:#27ae60}
+    .step-indicator.done .num{background:#27ae60}
+
+    .card{background:#fff;border-radius:12px;padding:1.5rem;margin-bottom:1.5rem}
+    .upload-zone{border:2px dashed #aaa;border-radius:12px;padding:2rem;text-align:center;cursor:pointer;background:#fff;transition:border-color .2s}
+    .upload-zone:hover,.upload-zone.dragover{border-color:#4a90d9}
+    .upload-zone input{display:none}
+
+    .previews{display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;margin-top:1rem}
+    .previews .panel{background:#f9f9f9;border-radius:10px;padding:1rem;text-align:center}
+    .previews .panel h3{margin-bottom:.5rem;font-size:.85rem;color:#666}
+    .previews img{max-width:100%;max-height:380px;border-radius:6px;background:repeating-conic-gradient(#ddd 0% 25%,#fff 0% 50%) 50%/16px 16px}
+
+    .actions{display:flex;justify-content:center;gap:.5rem;margin-top:1rem;flex-wrap:wrap}
+    .btn{padding:.55rem 1.3rem;border:none;border-radius:8px;font-size:.95rem;cursor:pointer;text-decoration:none;display:inline-block}
+    .btn-primary{background:#4a90d9;color:#fff}
+    .btn-primary:hover{background:#357abd}
+    .btn-primary:disabled{background:#aaa;cursor:not-allowed}
+    .btn-success{background:#27ae60;color:#fff}
+    .btn-success:hover{background:#1e8e4e}
+    .btn-outline{background:#fff;color:#4a90d9;border:1.5px solid #4a90d9}
+    .btn-outline:hover{background:#eef4fc}
+    .btn-secondary{background:#888;color:#fff}
+    .btn-secondary:hover{background:#666}
+
+    .edit-row{display:flex;gap:.5rem;margin-top:.8rem}
+    .edit-row input{flex:1;padding:.5rem .75rem;border:1px solid #ccc;border-radius:8px;font-size:.9rem}
+
+    /* Advanced settings */
+    details{margin-top:1rem}
+    summary{cursor:pointer;font-weight:600;font-size:.95rem}
+    .config-grid{display:grid;grid-template-columns:1fr 1fr;gap:.8rem 1.5rem;margin-top:1rem}
+    .config-item label{display:block;font-size:.8rem;color:#555;margin-bottom:2px}
+    .config-item .label-row{display:flex;align-items:center;gap:.35rem;margin-bottom:2px}
+    .config-item .label-row label{margin-bottom:0}
+    .config-item .range-row{display:flex;align-items:center;gap:.5rem}
+    .config-item input[type="range"]{flex:1}
+    .config-item .range-val{font-size:.85rem;min-width:2.5rem;text-align:right}
+    .toggle{display:flex;align-items:center;gap:.5rem;margin-top:.3rem}
+    .tip{position:relative;display:inline-flex;align-items:center;justify-content:center;width:15px;height:15px;border-radius:50%;background:#ccc;color:#fff;font-size:.65rem;font-weight:700;cursor:help;flex-shrink:0}
+    .tip .tip-text{visibility:hidden;opacity:0;position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);width:250px;background:#333;color:#fff;font-size:.78rem;font-weight:400;line-height:1.4;padding:.6rem .75rem;border-radius:8px;z-index:10;pointer-events:none;transition:opacity .15s}
+    .tip .tip-text::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top-color:#333}
+    .tip:hover .tip-text{visibility:visible;opacity:1}
+
+    .spinner{display:none;margin:1rem auto;width:36px;height:36px;border:4px solid #ddd;border-top-color:#4a90d9;border-radius:50%;animation:spin .8s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .error{color:#e74c3c;text-align:center;margin-top:.5rem}
+    .hidden{display:none!important}
+  </style>
+</head>
+<body>
+
+<h1>🧵 Embroidery Preprocessor</h1>
+<p class="subtitle">Generate a cartoon portrait, then convert it to an embroidery-ready image</p>
+
+<!-- Step indicators -->
+<div class="steps">
+  <div class="step-indicator active" id="ind1"><span class="num">1</span> Generate Cartoon</div>
+  <div class="step-indicator" id="ind2"><span class="num">2</span> Embroidery Pipeline</div>
+</div>
+
+<!-- ==================== STEP 1 ==================== -->
+<div id="step1">
+  <div class="card">
+    <div class="upload-zone" id="dropZone">
+      <p>Drop a PNG/JPEG image here or <strong>click to browse</strong></p>
+      <input type="file" id="fileInput" accept="image/png, image/jpeg">
+    </div>
+  </div>
+
+  <div class="card" id="promptCard">
+    <label style="font-size:.85rem;font-weight:600;color:#555">Generation Prompt</label>
+    <span class="tip" style="vertical-align:middle;margin-left:.3rem">?<span class="tip-text">This prompt tells the AI how to convert your photo into a cartoon. You can edit it to change the style before generating.</span></span>
+    <textarea id="basePrompt" rows="3" style="width:100%;margin-top:.4rem;padding:.5rem .75rem;border:1px solid #ccc;border-radius:8px;font-size:.9rem;font-family:inherit;resize:vertical">{{ default_prompt }}</textarea>
+  </div>
+
+  <div class="actions">
+    {% if has_api_key %}
+    <button class="btn btn-primary" id="generateBtn" disabled>🎨 Generate Cartoon</button>
+    {% else %}
+    <button class="btn btn-primary" disabled title="Set GEMINI_API_KEY env variable to enable">🎨 Generate Cartoon (no API key)</button>
+    {% endif %}
+    <button class="btn btn-outline" id="skipBtn">Skip to Embroidery →</button>
+  </div>
+
+  <div class="spinner" id="spinner1"></div>
+  <p class="error" id="error1"></p>
+
+  <div class="previews hidden" id="genPreviews">
+    <div class="panel"><h3>Uploaded</h3><img id="uploadedImg"></div>
+    <div class="panel"><h3>Generated Cartoon</h3><img id="generatedImg"></div>
+  </div>
+
+  <div class="hidden" id="genActions">
+    <div class="edit-row">
+      <input type="text" id="editPrompt" placeholder="Optional: describe changes (e.g. 'make hair darker', 'add glasses')">
+      <button class="btn btn-secondary" id="regenerateBtn">🔄 Regenerate</button>
+    </div>
+    <div class="actions" style="margin-top:.8rem">
+      <button class="btn btn-success" id="acceptBtn">✓ Use This → Step 2</button>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== STEP 2 ==================== -->
+<div id="step2" class="hidden">
+  <div class="actions" style="margin-bottom:1rem">
+    <button class="btn btn-outline" id="backBtn">← Back to Step 1</button>
+  </div>
+
+  <div class="card">
+    <div class="upload-zone hidden" id="dropZone2">
+      <p>Drop a cartoon PNG/JPEG here or <strong>click to browse</strong></p>
+      <input type="file" id="fileInput2" accept="image/png, image/jpeg">
+    </div>
+
+    <div class="previews">
+      <div class="panel"><h3>Input</h3><img id="pipelineInput"></div>
+      <div class="panel"><h3>Embroidery Result</h3><img id="pipelineResult"></div>
+    </div>
+
+    <div class="actions">
+      <button class="btn btn-primary" id="processBtn">⚙️ Process Image</button>
+      <a class="btn btn-success hidden" id="downloadBtn">📥 Download Result</a>
+    </div>
+
+    <div class="spinner" id="spinner2"></div>
+    <p class="error" id="error2"></p>
+
+    <details>
+      <summary>⚙️ Advanced Settings</summary>
+      <div class="config-grid">
+        {% set sliders = [
+          ("width", "Resize Width", 128, 1024, 1,
+           "Controls the output image width in pixels. ↑ Increase for sharper, more detailed results (larger file). ↓ Decrease for faster processing and smaller files."),
+          ("K", "Fill Colors", 2, 16, 1,
+           "Number of colors used to fill the image (excluding black outlines and white highlights). ↑ Increase to capture more subtle details like blush, shadows, and lip shading. ↓ Decrease for a simpler, bolder look with fewer color regions."),
+          ("bilateral_d", "Smoothing Strength", 1, 15, 2,
+           "How aggressively the image is smoothed before coloring. ↑ Increase to remove more noise and get cleaner color patches. ↓ Decrease to keep more of the original texture and fine details."),
+          ("bilateral_sigma_color", "Color Blending", 10, 150, 1,
+           "How easily nearby colors blend into each other. ↑ Increase to merge similar shades together (e.g., smooth skin tones). ↓ Decrease to keep subtle color differences visible."),
+          ("bilateral_sigma_space", "Blend Reach", 10, 150, 1,
+           "How far the color blending reaches across the image. ↑ Increase for broader, more uniform color areas. ↓ Decrease to keep blending local and preserve small features."),
+          ("morph_kernel_size", "Gap Filling", 1, 11, 2,
+           "Closes tiny gaps and holes in color regions. ↑ Increase to fill more gaps and get cleaner shapes. ↓ Decrease to preserve thin lines and small details."),
+          ("dark_threshold", "Outline Sensitivity", 10, 200, 1,
+           "Controls what counts as a black outline. ↑ Increase to detect more lines (including faint ones — may pick up shadows). ↓ Decrease to only keep the darkest, strongest outlines."),
+          ("white_threshold", "White Detection", 100, 255, 1,
+           "Controls what counts as a white highlight (teeth, eye whites). ↑ Increase to only detect the very brightest whites. ↓ Decrease to include slightly off-white areas as highlights."),
+          ("bg_alpha_cutoff", "BG Removal Strictness", 0, 255, 1,
+           "How strictly the background is separated from the subject. ↑ Increase to remove more aggressively (may clip edges of the subject). ↓ Decrease to keep more of the edges intact (may leave background remnants)."),
+        ] %}
+        {% for name, label, mn, mx, step, tooltip in sliders %}
+        <div class="config-item">
+          <div class="label-row">
+            <label>{{ label }}</label>
+            <span class="tip">?<span class="tip-text">{{ tooltip }}</span></span>
+          </div>
+          <div class="range-row">
+            <input type="range" name="{{ name }}" min="{{ mn }}" max="{{ mx }}" step="{{ step }}" value="{{ defaults[name] }}" oninput="this.nextElementSibling.textContent=this.value">
+            <span class="range-val">{{ defaults[name] }}</span>
+          </div>
+        </div>
+        {% endfor %}
+        <div class="config-item">
+          <div class="label-row">
+            <label>Remove Background</label>
+            <span class="tip">?<span class="tip-text">Automatically removes the background, leaving only the subject on a transparent canvas. Turn off if your image already has no background or if the removal is cutting into the subject.</span></span>
+          </div>
+          <div class="toggle">
+            <input type="checkbox" name="remove_bg" id="removeBgToggle" {% if defaults.remove_bg %}checked{% endif %}>
+            <label for="removeBgToggle">Enabled</label>
+          </div>
+        </div>
+      </div>
+    </details>
+  </div>
+</div>
+
+<script>
+/* ---- Elements ---- */
+const $ = id => document.getElementById(id);
+const dropZone = $("dropZone"), fileInput = $("fileInput");
+const generateBtn = $("generateBtn"), skipBtn = $("skipBtn");
+const spinner1 = $("spinner1"), error1 = $("error1");
+const genPreviews = $("genPreviews"), genActions = $("genActions");
+const uploadedImg = $("uploadedImg"), generatedImg = $("generatedImg");
+const editPrompt = $("editPrompt"), regenerateBtn = $("regenerateBtn"), acceptBtn = $("acceptBtn");
+const step1 = $("step1"), step2 = $("step2");
+const pipelineInput = $("pipelineInput"), pipelineResult = $("pipelineResult");
+const processBtn = $("processBtn"), downloadBtn = $("downloadBtn");
+const spinner2 = $("spinner2"), error2 = $("error2");
+const backBtn = $("backBtn");
+const ind1 = $("ind1"), ind2 = $("ind2");
+
+let selectedFile = null;
+let cartoonB64 = null;   // base64 of Gemini-generated image (only)
+let pipelineFile = null; // file object for pipeline (skip/upload case)
+let uploadDataUrl = null; // object URL of uploaded file
+
+/* ---- Upload handling ---- */
+dropZone.addEventListener("click", () => fileInput.click());
+dropZone.addEventListener("dragover", e => { e.preventDefault(); dropZone.classList.add("dragover"); });
+dropZone.addEventListener("dragleave", () => dropZone.classList.remove("dragover"));
+dropZone.addEventListener("drop", e => { e.preventDefault(); dropZone.classList.remove("dragover"); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener("change", () => handleFile(fileInput.files[0]));
+
+function handleFile(f) {
+  if (!f) return;
+  selectedFile = f;
+  uploadDataUrl = URL.createObjectURL(f);
+  uploadedImg.src = uploadDataUrl;
+  dropZone.querySelector("p").textContent = f.name;
+  if (generateBtn) generateBtn.disabled = false;
+  skipBtn.disabled = false;
+  // Reset
+  genPreviews.classList.add("hidden");
+  genActions.classList.add("hidden");
+  cartoonB64 = null;
+  error1.textContent = "";
+}
+
+/* ---- Step 1: Generate ---- */
+async function callGenerate() {
+  if (!selectedFile) return;
+  const fd = new FormData();
+  fd.append("image", selectedFile);
+  fd.append("base_prompt", $("basePrompt").value.trim());
+  const edit = editPrompt.value.trim();
+  if (edit) fd.append("edit_prompt", edit);
+  if (cartoonB64) {
+    const bin = atob(cartoonB64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    fd.append("previous_image", new Blob([arr], {type: "image/png"}), "previous.png");
+  }
+
+  spinner1.style.display = "block";
+  error1.textContent = "";
+  if (generateBtn) generateBtn.disabled = true;
+
+  try {
+    const res = await fetch("/generate", { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    cartoonB64 = data.image;
+    generatedImg.src = "data:image/png;base64," + cartoonB64;
+    genPreviews.classList.remove("hidden");
+    genActions.classList.remove("hidden");
+  } catch (e) {
+    error1.textContent = "Error: " + e.message;
+  } finally {
+    spinner1.style.display = "none";
+    if (generateBtn) generateBtn.disabled = false;
+  }
+}
+
+if (generateBtn) generateBtn.addEventListener("click", callGenerate);
+regenerateBtn.addEventListener("click", callGenerate);
+
+/* ---- Step 1 → Step 2 transitions ---- */
+function goToStep2(b64, file, previewSrc) {
+  cartoonB64 = b64;
+  pipelineFile = file;
+  pipelineInput.src = previewSrc || "";
+  pipelineResult.src = "";
+  downloadBtn.classList.add("hidden");
+  error2.textContent = "";
+
+  const dz2 = $("dropZone2");
+  if (!b64 && !file) {
+    dz2.classList.remove("hidden");
+    processBtn.disabled = true;
+  } else {
+    dz2.classList.add("hidden");
+    processBtn.disabled = false;
+  }
+
+  step1.classList.add("hidden");
+  step2.classList.remove("hidden");
+  ind1.className = "step-indicator done";
+  ind2.className = "step-indicator active";
+}
+
+acceptBtn.addEventListener("click", () => {
+  if (!cartoonB64) return;
+  goToStep2(cartoonB64, null, "data:image/png;base64," + cartoonB64);
+});
+
+skipBtn.addEventListener("click", () => {
+  if (selectedFile) {
+    goToStep2(null, selectedFile, uploadDataUrl);
+  } else {
+    goToStep2(null, null, "");
+  }
+});
+
+backBtn.addEventListener("click", () => {
+  step2.classList.add("hidden");
+  step1.classList.remove("hidden");
+  ind1.className = "step-indicator active";
+  ind2.className = "step-indicator";
+});
+
+/* ---- Step 2: Upload zone (for skip without file) ---- */
+const dropZone2 = $("dropZone2"), fileInput2 = $("fileInput2");
+dropZone2.addEventListener("click", () => fileInput2.click());
+dropZone2.addEventListener("dragover", e => { e.preventDefault(); dropZone2.classList.add("dragover"); });
+dropZone2.addEventListener("dragleave", () => dropZone2.classList.remove("dragover"));
+dropZone2.addEventListener("drop", e => { e.preventDefault(); dropZone2.classList.remove("dragover"); handleStep2File(e.dataTransfer.files[0]); });
+fileInput2.addEventListener("change", () => handleStep2File(fileInput2.files[0]));
+
+function handleStep2File(f) {
+  if (!f) return;
+  selectedFile = f;
+  pipelineFile = f;
+  cartoonB64 = null;
+  const url = URL.createObjectURL(f);
+  pipelineInput.src = url;
+  dropZone2.querySelector("p").textContent = f.name;
+  processBtn.disabled = false;
+}
+
+/* ---- Step 2: Pipeline ---- */
+processBtn.addEventListener("click", async () => {
+  if (!cartoonB64 && !pipelineFile) return;
+  const fd = new FormData();
+
+  // Always send as file upload to avoid 413 payload limits
+  if (pipelineFile) {
+    fd.append("image", pipelineFile);
+  } else if (cartoonB64) {
+    const bin = atob(cartoonB64);
+    const arr = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+    fd.append("image", new Blob([arr], {type: "image/png"}), "cartoon.png");
+  }
+
+  document.querySelectorAll(".config-grid input[type=range]").forEach(el => fd.append(el.name, el.value));
+  fd.append("remove_bg", $("removeBgToggle").checked ? "true" : "false");
+
+  processBtn.disabled = true;
+  spinner2.style.display = "block";
+  error2.textContent = "";
+  downloadBtn.classList.add("hidden");
+
+  try {
+    const res = await fetch("/process", { method: "POST", body: fd });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error);
+
+    const dataUrl = "data:image/png;base64," + data.image;
+    pipelineResult.src = dataUrl;
+    downloadBtn.href = dataUrl;
+    downloadBtn.download = (selectedFile ? selectedFile.name.replace(/\.\w+$/, "") : "image") + "_embroidery.png";
+    downloadBtn.classList.remove("hidden");
+  } catch (e) {
+    error2.textContent = "Error: " + e.message;
+  } finally {
+    processBtn.disabled = false;
+    spinner2.style.display = "none";
+  }
+});
+</script>
+</body>
+</html>
